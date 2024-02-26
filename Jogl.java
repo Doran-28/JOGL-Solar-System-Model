@@ -47,8 +47,8 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		//Display the sun
 		returnToOrigin();
 		art = artbook.get(0);
-		//drawPlanet(art);
-		drawColorFilledSphere(gl,10f, 10, 10);
+		drawPlanet(art);
+		//drawColorFilledSphere(gl,10f, 10, 10);
 		
 		//Display the earth
 		returnToOrigin();
@@ -94,35 +94,7 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		glu.gluSphere(quad, art.getRadius(), 10, 10);
 	}
 
-	private void drawColorFilledSphere(GL2 gl, float radius, int slices, int stacks) {
-		// Draw color-filled sphere
-		for (int i = 0; i < slices; i++) {
-			double theta1 = i * Math.PI / slices;
-			double theta2 = (i + 1) * Math.PI / slices;
 
-			gl.glBegin(GL2.GL_QUAD_STRIP);
-			for (int j = 0; j <= stacks; j++) {
-				double phi = j * 2 * Math.PI / stacks;
-
-				// Vertex 1
-				double x1 = radius * Math.sin(theta1) * Math.cos(phi);
-				double y1 = radius * Math.sin(theta1) * Math.sin(phi);
-				double z1 = radius * Math.cos(theta1);
-
-				// Vertex 2
-				double x2 = radius * Math.sin(theta2) * Math.cos(phi);
-				double y2 = radius * Math.sin(theta2) * Math.sin(phi);
-				double z2 = radius * Math.cos(theta2);
-
-				// Set color here
-				gl.glColor3f((float)i / slices, (float)j / stacks, 1.0f);
-
-				gl.glVertex3d(x1, y1, z1);
-				gl.glVertex3d(x2, y2, z2);
-			}
-			gl.glEnd();
-		}
-	}
 
 	/**
 	 * Gets the coordinates from the modelview matrix and stores it in the position property
