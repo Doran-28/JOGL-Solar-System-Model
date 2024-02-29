@@ -21,9 +21,9 @@ public class GlFrame extends JFrame{
 	 * The author chose to use "glf" as the standard naming convention
 	 * @param title The title (standard format: title.glf)
 	 */
-	public GlFrame(String title, Vec3f position, Vec3f focus, Vec3f upDirection) {
+	public GlFrame(String title, float camX, float camY, float camZ, float focusX, float focusY, float focusZ) {
 		super(title);
-		jogl = new Jogl(position, focus, upDirection);
+		jogl = new Jogl(camX, camY, camZ, focusX, focusY, focusZ);
 		this.add(jogl.getCanvas());
 		this.setSize(jogl.getSize());
 		this.add(jogl.getCanvas()); //Adds the display canvas to the frame
@@ -58,17 +58,6 @@ public class GlFrame extends JFrame{
 	public void loadArtbook(ArrayList<Planet> artbook) {
 		jogl.loadArtbook(artbook);
 	}
-	
-	public void setCameraPosition(Vec3f position) {
-		jogl.setCameraPosition(position);
-	}
-	
-	public void setCameraFocus(Vec3f focus) {
-		jogl.setCameraFocus(focus);
-	}
-	
-	public void setUpDirection(Vec3f upDirection) {
-		jogl.setCameraUpDirection(upDirection);
-	}
+
 	
 }

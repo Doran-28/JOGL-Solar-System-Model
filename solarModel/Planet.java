@@ -16,6 +16,7 @@ public class Planet {
 	private float rotateRate, orbitRate; //relative velocities to earth
 	protected Vec3f color, position;
 	protected Moon moon;
+	protected PlanetEnum planetEnum;
 	
 	//all ratios are of earth's respective properties
 //	static float[] radiusRatios = {0.3829f, 0.9499f, 0.12742f, 0.5320f, 6.818f, 9.140f, 3.980f, 3.864f};
@@ -23,7 +24,8 @@ public class Planet {
 	static float[] rotateRatios = {59f, 243.0f, 1.0f, 1.025f, 0.4138f, 0.4458f, 0.7180f, 0.6708f};
 	static float[] orbitRatios = {0.2410f, 0.6164f, 1.0f, 1.882f, 11.8f, 29.5f, 84.1f, 165.0f};
 	static float[] offsetRatios = {0.410f, 0.72f, 1f, 1.52f, 5.20f, 9.538f, 19.61f, 30.00f};
-	static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.39f,0.59f,0.66f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
+//	static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.39f,0.59f,0.66f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
+	static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.0f,1.0f,0.0f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
 	private final int EARTHINDEX = 2;
 
 	
@@ -43,10 +45,20 @@ public class Planet {
 				this.rotateRate = earthRotateRate * rotateRatios[planetIndex];
 				this.orbitRate = earthOrbitRate * orbitRatios[planetIndex];
 				this.color = new Vec3f(planetColors[planetIndex]);
+				this.planetEnum = p;
+				this.position = new Vec3f(0.0f,0.0f,0.0f);
 			}
 		}
 	}
 	
+	public PlanetEnum getEnum() {
+		return planetEnum;
+	}
+
+	public void setPlanetEnum(PlanetEnum planetEnum) {
+		this.planetEnum = planetEnum;
+	}
+
 	/**
 	 * Make a new planet based on the enum
 	 * @param position arr for position vertex
@@ -65,6 +77,7 @@ public class Planet {
 				this.rotateRate = earthRotateRate * rotateRatios[planetIndex];
 				this.orbitRate = earthOrbitRate * orbitRatios[planetIndex];
 				this.color = new Vec3f(planetColors[planetIndex]);
+				this.planetEnum = p;
 			}
 		}
 	}
@@ -95,6 +108,7 @@ public class Planet {
 		this.rotateRate = rotateRate;
 		this.orbit = 0; this.rotation = 0;
 		this.color = new Vec3f(color);
+		this.position = new Vec3f(0.0f,0.0f,0.0f);
 	}
 	
 	public Planet(float[] position, float radius, float offset, float orbitRate, float rotateRate, float[] color) {
@@ -113,9 +127,9 @@ public class Planet {
 	 * @param offset depreceated
 	 * @return
 	 */
-	public float orbit(float frameCount, float offset) {
+	public float orbit(float frameCount) {
 		//find the new orbit angle theta and the delta between the current and new orbit
-		float theta = frameCount * this.orbitRate;
+		float theta = frameCount * 1/(this.orbitRate);
 		this.orbit = theta;
 		return this.orbit;
 	}
@@ -126,15 +140,23 @@ public class Planet {
 	 * @return
 	 */
 	public float rotate(float frameCount) {
-		//find the new orbit angle theta and the delta between the current and new orbit
+		//find the new rotation angle theta 
 		float theta = frameCount * this.rotateRate;
 		this.rotation = theta;
 		return this.rotation;
 	}
 	
 	public void setX(float value) {
-		if(value == 0) value = 1;
+//		if(value == 0) value = 1;
 		this.position.setX(value);
+	}
+	
+	public float getX() {
+		return this.position.x();
+	}
+	
+	public float getZ() {
+		return this.position.z();
 	}
 	
 	public void setZ(float value) {
