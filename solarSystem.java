@@ -33,6 +33,8 @@ public class solarSystem{
 		Vec3f position = new Vec3f(-10.0f,10.0f,200.0f);
 		Vec3f focus = new Vec3f(0.0f, 0.0f, 0.0f);
 		Vec3f upDirection = new Vec3f(0.0f, 1.0f, 0.0f);
+		float camX = -10.0f, camY = 10.0f, camZ = 300.0f;
+		float focusX = 1.0f, focusY = 1.0f, focusZ = 1.0f;
 		
 		//whole solar system
 //		Vec3f position = new Vec3f(-10.0f,10.0f,700.0f);
@@ -43,8 +45,7 @@ public class solarSystem{
 //		Vec3f position = new Vec3f(0.0f,700.0f,0.0f);
 //		Vec3f focus = new Vec3f(0.0f, 0.0f, 0.0f);
 //		Vec3f upDirection = new Vec3f(0.0f, 0.0f, 1.0f);
-		GlFrame glf = new GlFrame("Solar.glf", position, focus, upDirection);
-		glf.setCameraPosition(new Vec3f(-10.0f,10.0f,700.0f));
+		GlFrame glf = new GlFrame("Solar.glf", camX, camY, camZ, focusX, focusY, focusZ);
 		glf.loadArtbook(planets);
 		glf.action();
 	}
