@@ -21,7 +21,6 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	private ArrayList<Planet> artbook;
 	private GLCanvas canvas;
 	private Animator director;
-	private Camera camera; //Handler for camera control
 	private float frameCount = 0;
 	// Textures for each planet
 	private ArrayList<Texture> planetTextures;
@@ -41,7 +40,6 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	 * Creates a new instance of the jogl implementation with a defined camera
 	 */
 	public Jogl (float camX, float camY, float camZ, float focusX, float focusY, float focusZ) {
-		camera = new Camera(camX, camY, camZ, focusX, focusY, focusZ);
 		canvas = makeCanvas(500,500);
 		canvas.addMouseListener(this);
 		canvas.addKeyListener(this);
@@ -56,19 +54,25 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	@Override
 	public void display(GLAutoDrawable drawable) {
 		//initialise the display matrix
-		int clearString = (GL.GL_COLOR_BUFFER_BIT  | GL.GL_DEPTH_BUFFER_BIT);
-		gl = initMatrix(drawable, GL2.GL_MODELVIEW, clearString);
-		Planet art;
-		float camOffset = 5f;
+		gl = initMatrix(drawable, GL2.GL_MODELVIEW);
 		
-		//the executive loop
+		//get earth position
+		float earthX = artbook.get(3).getX(),
+				earthZ = artbook.get(3).getZ(),
+				earthRotation = artbook.get(3).getRotation();
+		
+		//Draw each planet
+		Planet art;
 		for(int i = 0; i < artbook.size(); i++) {
-			if ( i == 0) continue;  // Temporary code to skip the sun
 			returnToOrigin();
+			//apply camera transformations first
+			gl.glRotatef(-(earthRotation), 0, 1, 0);
+			gl.glTranslatef(-earthX, 1, -earthZ-1);
+			
+			//then draw the planets
 			art = artbook.get(i);
 			drawPlanet(art, planetTextures.get(i));
 		}
-		trackPlanet(artbook.get(3), camOffset);
 		frameCount += 1;
 	}
 	
@@ -118,18 +122,16 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	
 	@Override
 	public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {
-		//setup the viewport
-		float VERTICAL_FOV = 60.0f;
-		float aspectRatio = (float) width/height;
-		float nearClip = .1f, farClip = 1000.0f;
-		
 		//Setup the viewport
 		gl = drawable.getGL().getGL2();
 		gl.glMatrixMode(GL2.GL_PROJECTION);
 		gl.glViewport(0, 0, width, height);
-		returnToIdentity();
+		gl.glLoadIdentity();
 		
 		//setup the perspective projection to the viewport
+		float VERTICAL_FOV = 60.0f;
+		float aspectRatio = (float) width/height;
+		float nearClip = .1f, farClip = 1000.0f;
 		glu.gluPerspective(VERTICAL_FOV, aspectRatio, nearClip, farClip);
 //		camera.setCamera();
 	}
@@ -153,7 +155,7 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 			orbitPlanet(art);
 
 
-		//		rotatePlanet(art);
+		rotatePlanet(art);
 		texture.bind(gl);
 		gl.glEnable(GL2.GL_TEXTURE_2D);
 		texture.enable(gl);
@@ -175,30 +177,24 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	 * @return the actual offset of the planet
 	 */
 	private void orbitPlanet(Planet art) {
-		float sunRadius = 109.3f, radius = art.getRadius(), offset = art.getOffset(), orbit;
+		float sunRadius = 109.3f,
+				radius = art.getRadius(),
+				offset = art.getOffset(),
+				orbit;
 		
 		//if the planet isn't the sun, skew the offset
 		float skew = sunRadius + radius;
 		if(radius != sunRadius) offset += skew;
 		
-		//rotate the planet
+		//Get the new orbital position of the planet
 		orbit = art.orbit(frameCount) % 360;
-//		gl.glRotatef(orbit, 0.0f, 1.0f, 0.0f);
-		
-		//Translate the planet to it's orbital radius
-//		gl.glTranslatef(offset, 0.0f, 0.0f);
 		
 		//set the position of the planet
-		float x = (float) (offset * Math.cos(Math.toRadians(orbit)));
-		float z = (float) (offset * Math.sin(Math.toRadians(orbit)));
-		gl.glTranslatef(x, 0, z);
-		art.setX(x);
-		art.setZ(z);
-		if(art.getEnum() == PlanetEnum.EARTH) {
-//			System.out.println(art.getEnum() + " coordinates is < " + x +", 0, " + z +" >");
-//			float magnitude = (float) Math.sqrt((Math.pow(x, 2)) + (Math.pow(z, 2)));
-//			System.out.println("Magnitude of earth is " + magnitude + " units\n");
-		}
+		float planetX = (float) (offset * Math.cos(Math.toRadians(orbit)));
+		float planetZ = (float) (offset * Math.sin(Math.toRadians(orbit)));
+		gl.glTranslatef(planetX, 0, planetZ);
+		art.setX(planetX);
+		art.setZ(planetZ);
 	}
 	
 	/**
@@ -207,32 +203,7 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	 */
 	private void rotatePlanet(Planet art) {
 		float rotation = art.rotate(frameCount);
-		gl.glRotatef(rotation, 0.0f, 1.0f, 0.0f);
-	}
-	
-	/**
-	 * Sets the camera to track the given planet's angle of rotation from a given offset
-	 * @param p
-	 * @param offset
-	 */
-	public void trackPlanet(Planet p, float offset) {
-		//get planet position (also focal point), angle of rotation, and camera position
-		float focusX = p.getX(), focusZ = p.getZ();
-		float rotation = p.getRotation() % 360;
-		float camX = focusX + (float) (offset * Math.cos(Math.toRadians(rotation)));
-		float camZ = focusZ + (float) (offset * Math.sin(Math.toRadians(rotation)));
-		
-		//use this method if you're calling gluLookAt from the camera (reshape)
-//		camera.setX(camX); camera.setY(0); camera.setZ(camZ);
-//		camera.setViewX(focusX); camera.setViewY(0.0f); camera.setViewZ(focusZ);
-		
-		//use this method if you're directly setting the camera 
-		glu.gluLookAt(camX, 0.0f, camZ, focusX, 0.0f, focusZ, 0.0f, 1.0f, 0.0f);
-//		glu.gluLookAt(focusX, 0.0f, focusZ, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-		
-		System.out.println("Planet located at < " + focusX +", 0, " + focusZ +" >");
-		System.out.println("Camera focused at < " + focusX +", 0, " + focusZ +" >");
-		System.out.println("Camera at < " + camX +", 0, " + camZ +" >\n");
+		gl.glRotatef(-rotation, 0.0f, 1.0f, 0.0f);
 	}
 	
 	/**
@@ -325,7 +296,8 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	 * @param clearString The bitstring to clear the buffers
 	 * @return the matrix for the canvas now interfaced to OpenGL
 	 */
-	private GL2 initMatrix(GLAutoDrawable drawable, int matrix, int clearString) {
+	private GL2 initMatrix(GLAutoDrawable drawable) {
+		int clearString = (GL.GL_COLOR_BUFFER_BIT  | GL.GL_DEPTH_BUFFER_BIT);
 		gl = drawable.getGL().getGL2();
 		gl.glClear(clearString);
 		gl.glMatrixMode(matrix);
@@ -346,10 +318,6 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	/**
 	 * Returns the current matrix pointer to the identity (1,1,1)
 	 */
-	private void returnToIdentity() {
-		gl.glLoadIdentity();
-	}
-	
 	private void returnToOrigin() {
 		gl.glLoadIdentity();
 		gl.glTranslatef(-1.0f, -1.0f, -1.0f);
@@ -369,101 +337,5 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	public Dimension getSize() {
 		return canvas.getPreferredSize();
 	}
-	
-	/**
-	 * Helper class to handle camera controls
-	 */
-	class Camera{
-		
-		private float x, y, z;
-		private Vec3f viewVector,
-			upVector,
-			leftVector;
-		
-		public Camera(float x, float y, float z, float viewX, float viewY, float viewZ) {
-			this.x = x; this.y = y; this.z = z;
-			//find the vectors of the camera coordinate system
-			viewVector = (new Vec3f(viewX, viewY, viewZ)).normalize();
-			upVector = (new Vec3f(0.0f, 1.0f, 0.0f)).normalize();
-			leftVector = (viewVector.cross(upVector)).normalize();			
-		}
-		
-		public float getX() {
-			return x;
-		}
-
-		public void setX(float x) {
-			this.x = x;
-		}
-
-		public float getY() {
-			return y;
-		}
-
-		public void setY(float y) {
-			this.y = y;
-		}
-
-		public float getZ() {
-			return z;
-		}
-
-		public void setZ(float z) {
-			this.z = z;
-		}
-		
-		public void setViewX(float x) {
-			this.viewVector.setX(x);
-		}
-		public void setViewY(float y) {
-			this.viewVector.setY(y);
-		}
-		public void setViewZ(float z) {
-			this.viewVector.setZ(z);
-		}
-		
-		
-		public float getViewX() {
-			return this.viewVector.x();
-		}
-		public float getViewY() {
-			return this.viewVector.y();
-		}
-		public float getViewZ() {
-			return this.viewVector.z();
-		}
-		public float getUpX() {
-			return this.upVector.x();
-		}
-		public float getUpY() {
-			return this.upVector.y();
-		}
-		public float getUpZ() {
-			return this.upVector.z();
-		}
-		public float getLeftX() {
-			return this.leftVector.x();
-		}
-		public float getLeftY() {
-			return this.leftVector.y();
-		}
-		public float getLeftZ() {
-			return this.leftVector.z();
-		}
-		
-		public void setCamera() {
-			float viewX = viewVector.x(),
-					viewY = viewVector.y(),
-					viewZ = viewVector.z();
-			
-			float upX = upVector.x(),
-					upY = upVector.y(),
-					upZ = upVector.z();
-			
-			glu.gluLookAt(x, y, z, viewX, viewY, viewZ, upX, upY, upZ);
-		}
-	}
-	
-	
 }
 
