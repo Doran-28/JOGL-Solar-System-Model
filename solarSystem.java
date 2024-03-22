@@ -15,7 +15,7 @@ public class solarSystem{
 	public static boolean setPlanets() {
 		//first add the sun
 		float[] color = {1.0f,0.55f,0.0f},
-				position = {1.0f, 1.0f, 1.0f};
+				position = {0.0f, 0.0f, 0.0f};
 		Planet p = new Planet(position, 109.3f, 0.0f, 0.0f, 0.8800f, color);
 		planets.add(p);
 		//add the other planets
@@ -30,22 +30,17 @@ public class solarSystem{
 		setPlanets();
 		
 		//up close camera params (earth in view at minimum
-		Vec3f position = new Vec3f(-10.0f,10.0f,200.0f);
-		Vec3f focus = new Vec3f(0.0f, 0.0f, 0.0f);
-		Vec3f upDirection = new Vec3f(0.0f, 1.0f, 0.0f);
-		float camX = -10.0f, camY = 10.0f, camZ = 300.0f;
-		float focusX = 1.0f, focusY = 1.0f, focusZ = 1.0f;
+//		float camX = -10.0f, camY = 10.0f, camZ = 300.0f;
+//		float focusX = 1.0f, focusY = 1.0f, focusZ = 1.0f;
 		
 		//whole solar system
-//		Vec3f position = new Vec3f(-10.0f,10.0f,700.0f);
-//		Vec3f focus = new Vec3f(0.0f, 0.0f, 0.0f);
-//		Vec3f upDirection = new Vec3f(0.0f, 1.0f, 0.0f);
+		float camX = -10.0f, camY = 10.0f, camZ = 700.0f;
+		float focusX = 0.0f, focusY = 0.0f, focusZ = 0.0f;
 		
 		//sun from above
-//		Vec3f position = new Vec3f(0.0f,700.0f,0.0f);
-//		Vec3f focus = new Vec3f(0.0f, 0.0f, 0.0f);
-//		Vec3f upDirection = new Vec3f(0.0f, 0.0f, 1.0f);
-		GlFrame glf = new GlFrame("Solar.glf", camX, camY, camZ, focusX, focusY, focusZ);
+//		float camX = 0.0f, camY = 700.0f, camZ = 0.0f;
+//		float focusX = 0.0f, focusY = 0.0f, focusZ = 0.0f;
+		GlFrame glf = new GlFrame("Solar.glf");
 		glf.loadArtbook(planets);
 		glf.action();
 	}

@@ -10,7 +10,7 @@ import com.jogamp.opengl.math.Vec3f;
  */
 public class Planet {
 	protected float rotation; //angle of rotation on this planet's axis
-	protected float orbit; //Planet's position in it's orbit
+	protected float orbit; //Planet's position in it's orbit (angle)
 	protected float radius; //relative to earth
 	protected float offset; //relative to earth's offset from the sun (1AU)
 	private float rotateRate, orbitRate; //relative velocities to earth
@@ -19,13 +19,11 @@ public class Planet {
 	protected PlanetEnum planetEnum;
 	
 	//all ratios are of earth's respective properties
-//	static float[] radiusRatios = {0.3829f, 0.9499f, 0.12742f, 0.5320f, 6.818f, 9.140f, 3.980f, 3.864f};
-	static float[] radiusRatios = {0.3829f, 0.9499f, 1.12742f, 1, 6.818f, 9.140f, 3.980f, 3.864f};
-	static float[] rotateRatios = {59f, 243.0f, 1.0f, 1.025f, 0.4138f, 0.4458f, 0.7180f, 0.6708f};
-	static float[] orbitRatios = {0.2410f, 0.6164f, 1.0f, 1.882f, 11.8f, 29.5f, 84.1f, 165.0f};
-	static float[] offsetRatios = {0.410f, 0.72f, 1f, 1.52f, 5.20f, 9.538f, 19.61f, 30.00f};
-//	static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.39f,0.59f,0.66f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
-	static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.0f,1.0f,0.0f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
+	private static float[] radiusRatios = {0.382f, 0.949f, 1.000f, 0.532f, 11.209f, 9.449f, 4.007f, 3.883f};
+	private static float[] rotateRatios = {58.60f, -243.0f, 1.000f, 1.030f, 0.410f, 0.430f, -0.720f, 0.670f};
+	private static float[] orbitRatios = {4.1537f, 1.6254f, 1.0000f, 0.5319f, 0.0844f, 0.0339f, 0.0119f, 0.0061f};
+	private static float[] offsetRatios = {0.3871f, 0.7233f, 1.000f, 1.524f, 5.203f, 9.582f, 19.22f, 30.05f};
+	private static float[][] planetColors = {{0.76f,0.74f,0.74f}, {0.85f,0.70f,0.57f}, {0.39f,0.59f,0.66f}, {0.95f,0.38f,0.47f}, {0.75f,0.51f,0.22f}, {0.95f,0.81f,0.53f}, {0.58f,0.73f,0.75f}, {0.47f,0.62f,0.75f}};
 	private final int EARTHINDEX = 2;
 
 	
@@ -37,7 +35,11 @@ public class Planet {
 		//init rotation and orbit
 		this.rotation = 0; this.orbit = 0;
 		PlanetEnum[] planets = PlanetEnum.values();
-		float earthRadius = radiusRatios[EARTHINDEX], earthOffset = offsetRatios[EARTHINDEX], earthRotateRate = rotateRatios[EARTHINDEX], earthOrbitRate = orbitRatios[EARTHINDEX];
+		float earthRadius = radiusRatios[EARTHINDEX],
+				earthOffset = offsetRatios[EARTHINDEX],
+				earthRotateRate = rotateRatios[EARTHINDEX],
+				earthOrbitRate = orbitRatios[EARTHINDEX];
+		
 		for(int planetIndex = 0; planetIndex < planets.length; planetIndex++) {
 			if(planets[planetIndex] == p) {
 				this.radius = earthRadius * radiusRatios[planetIndex];
@@ -69,7 +71,10 @@ public class Planet {
 		this.rotation = 0; this.orbit = 0;
 		this.position = new Vec3f(position);
 		PlanetEnum[] planets = PlanetEnum.values();
-		float earthRadius = radiusRatios[EARTHINDEX], earthOffset = offsetRatios[EARTHINDEX], earthRotateRate = rotateRatios[EARTHINDEX], earthOrbitRate = orbitRatios[EARTHINDEX];
+		float earthRadius = radiusRatios[EARTHINDEX],
+				earthOffset = offsetRatios[EARTHINDEX],
+				earthRotateRate = rotateRatios[EARTHINDEX],
+				earthOrbitRate = orbitRatios[EARTHINDEX];
 		for(int planetIndex = 0; planetIndex < planets.length; planetIndex++) {
 			if(planets[planetIndex] == p) {
 				this.radius = earthRadius * radiusRatios[planetIndex];
@@ -81,25 +86,6 @@ public class Planet {
 			}
 		}
 	}
-	
-//	/**
-//	 * Create a new planet and moon from an enum 
-//	 * @param p the enum
-//	 * @param moonRadius
-//	 * @param moonOffset The distance from the planet to the moon
-//	 */
-//	public Planet(PlanetEnum p, float moonRadius, float moonOffset) {
-//		this.rotation = 0; this.orbit = 0;
-//		PlanetEnum[] planets = PlanetEnum.values();
-//		for(int planetIndex = 0; planetIndex < 9; planetIndex++) {
-//			if(planets[planetIndex] == p) {
-//				this.radius = earth.radius * radiusRatios[planetIndex];
-//				this.offset = earth.offset * offsetRatios[planetIndex];
-//				this.color = new Vec3f(planetColors[planetIndex]);
-//			}
-//		}
-//		this.moon = new Moon(p);
-//	}
 	
 	public Planet(float radius, float offset, float orbitRate, float rotateRate, float[] color) {
 		this.radius = radius;
@@ -123,13 +109,13 @@ public class Planet {
 	
 	/**
 	 * Finds the new orbital angle at the current frame
-	 * @param frameCount
-	 * @param offset depreceated
-	 * @return
+	 * @param frameCount The current Frame
+	 * @return The new angle the planet makes with the sun
 	 */
 	public float orbit(float frameCount) {
+		if(this.planetEnum == null) return 0;
 		//find the new orbit angle theta and the delta between the current and new orbit
-		float theta = frameCount * 1/(this.orbitRate);
+		float theta = frameCount * (this.orbitRate);
 		this.orbit = theta;
 		return this.orbit;
 	}
@@ -137,7 +123,7 @@ public class Planet {
 	/**
 	 * Rotates the planet on it's axis
 	 * @param frameCount
-	 * @return
+	 * @return The angle the planet makes with it's axis of rotation
 	 */
 	public float rotate(float frameCount) {
 		//find the new rotation angle theta 
@@ -147,12 +133,19 @@ public class Planet {
 	}
 	
 	public void setX(float value) {
-//		if(value == 0) value = 1;
 		this.position.setX(value);
 	}
 	
 	public float getX() {
 		return this.position.x();
+	}
+	
+	public void setY(float value) {
+		this.position.setY(value);
+	}
+	
+	public float getY() {
+		return this.position.y();
 	}
 	
 	public float getZ() {
