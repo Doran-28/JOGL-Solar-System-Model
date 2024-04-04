@@ -1,5 +1,4 @@
 import java.awt.*;
-import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -8,22 +7,26 @@ import com.jogamp.opengl.awt.*;
 import com.jogamp.opengl.glu.*;
 import com.jogamp.opengl.math.Vec3f;
 import com.jogamp.opengl.util.*;
+
 import com.jogamp.opengl.util.texture.Texture;
 import com.jogamp.opengl.util.texture.TextureIO;
 import solarModel.*;
 /**
  * An implementation of jogl that simulates a solar system
  */
-public class Jogl implements GLEventListener, MouseListener, KeyListener {
+public class Jogl implements GLEventListener {
 	private GL2 gl; //interface to OpenGL (C) functions
 	private GLU glu; //graphics library utilities
 	private GLUquadric quad; //used for drawing spheres
 	private ArrayList<Planet> artbook;
 	private GLCanvas canvas;
 	private Animator director;
-	private Camera camera; //Handler for camera control
-	private float frameCount = 0;
-	// Textures for each planet
+	private float timeElapsed, rateOfTime; //time since sim began and it's rate
+	private PlanetEnum trackedPlanet; //the planet currently being tracked
+	private Camera camera; 
+	private boolean isFreeOrbit; //Flag for if the user is controlling the camera in-orbit
+	private int freeOrbitDirection; //0 (no orbit), 1 (right orbit), or -1 (left orbit)
+
 	private ArrayList<Texture> planetTextures;
 
 	private Texture sunTexture;
@@ -35,56 +38,146 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	private Texture saturnTexture;
 	private Texture uranusTexture;
 	private Texture neptuneTexture;
-
 	
 	/**
 	 * Creates a new instance of the jogl implementation with a defined camera
 	 */
-	public Jogl (float camX, float camY, float camZ, float focusX, float focusY, float focusZ) {
-		camera = new Camera(camX, camY, camZ, focusX, focusY, focusZ);
+	public Jogl () {
 		canvas = makeCanvas(500,500);
-		canvas.addMouseListener(this);
-		canvas.addKeyListener(this);
 		director = new Animator(canvas);
 		this.artbook = new ArrayList<Planet>();
-		this.planetTextures = new ArrayList<Texture>(8);
+		this.trackedPlanet = null;
+		this.timeElapsed = 0;
+		this.rateOfTime = 1;
+		this.isFreeOrbit = false;
+		this.freeOrbitDirection = 0;
+		this.camera = new Camera();
 	}
 	
 	/**
 	 * Driven by the Animator director and draws everything in the artbook
 	 */
 	@Override
-	public void display(GLAutoDrawable drawable) {
-		//initialise the display matrix
-		int clearString = (GL.GL_COLOR_BUFFER_BIT  | GL.GL_DEPTH_BUFFER_BIT);
-		gl = initMatrix(drawable, GL2.GL_MODELVIEW, clearString);
-		Planet art;
-		float camOffset = 5f;
+	public void display(GLAutoDrawable drawable) {		
+//		Calculates the orbital and rotational angles of each planet
+		calculatePlanetProperties();
+
+		//set the modelview matrix (VIEW COORDINATE SYSTEM)
+		initMatrix(drawable, GL2.GL_MODELVIEW);
 		
-		//the executive loop
-		for(int i = 0; i < artbook.size(); i++) {
-			if ( i == 0) continue;  // Temporary code to skip the sun
-			returnToOrigin();
-			art = artbook.get(i);
-			drawPlanet(art, planetTextures.get(i));
+		//Determine where the camera will be and place it (CAMERA COORDINATE SYSTEM)
+		if(this.camera.mode == this.camera.ORBIT) trackPlanet();
+		placeCamera();
+
+		GLUquadric quad1 = glu.gluNewQuadric();
+		//Draw sun with texuture and lighting
+		drawSun(quad1);
+		
+		/*
+		 * The model is placed, the camera is oriented in the canvas
+		 * and the viewport is filled with the camera.
+		 * now we begin drawing planets
+		 */
+		int index = 0;
+		Texture planetTexture;
+		for(Planet p : this.artbook) {
+
+			// Skip the sun
+			if (index == 0) {
+				index++;
+				continue;
+			}
+
+			//popping and pushing starts the canvas at the origin for every planet
+			gl.glPushMatrix();
+				//go to this planet's orbital position and rotate it
+				float rotationRadians = (float) Math.toRadians((p.getRotation()));
+				if(p.getEnum() != null) gl.glTranslatef(p.getX(), 0.0f, p.getZ());
+				gl.glRotatef(rotationRadians, 0.0f, 1.0f, 0.0f);
+
+				// Draw planet with texture
+				planetTexture = planetTextures.get(index);
+				planetTexture.bind(gl);
+				gl.glEnable(GL2.GL_TEXTURE_2D);
+				planetTexture.enable(gl);
+				glu.gluQuadricTexture(quad1, true);
+				glu.gluSphere(quad1,  0.5 * (p.getRadius()), 30, 30);
+				planetTexture.disable(gl);
+				gl.glDisable(GL2.GL_TEXTURE_2D);
+
+			gl.glPopMatrix();
+			index++;
 		}
-		trackPlanet(artbook.get(3), camOffset);
-		frameCount += 1;
+		
+		timeElapsed+= rateOfTime;
+	}
+	// Draws the Sun with texture, and making it the main light source
+	private void drawSun(GLUquadric quad){
+		float[] lightPosition = {0.0f, 0.0f, 0.0f, 1.0f}; // Example position (center of the scene)
+		gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
+		gl.glDisable(GL2.GL_LIGHTING);
+		gl.glPushMatrix();
+		gl.glTranslatef(lightPosition[0], lightPosition[1], lightPosition[2]); // Set the position of the light source
+		gl.glEnable(GL2.GL_TEXTURE_2D);
+		sunTexture.enable(gl);
+		sunTexture.bind(gl);
+		glu.gluQuadricTexture(quad, true);
+		glu.gluSphere(quad, 0.5f * 109.3f, 30, 30);
+		sunTexture.disable(gl);
+		gl.glDisable(GL2.GL_TEXTURE_2D);
+		gl.glPopMatrix();
+		gl.glEnable(GL2.GL_LIGHTING);
+	}
+	
+	/**
+	 * Initialises the specified JOGL matrix
+	 * @param drawable The canvas
+	 * @param matrix The matrix to be initialised (GL.GL_MODELVIEW, GL.GL_PROJECTION)
+	 * @param clearString The bitstring to clear the buffers
+	 * @return the matrix for the canvas now interfaced to OpenGL
+	 */
+	private GL2 initMatrix(GLAutoDrawable drawable, int matrix) {
+		int clearString = (GL.GL_COLOR_BUFFER_BIT  | GL.GL_DEPTH_BUFFER_BIT);
+		gl = drawable.getGL().getGL2();
+		gl.glClear(clearString);
+		gl.glMatrixMode(matrix);
+		gl.glLoadIdentity();
+		return gl;
+	}
+	
+	/**
+	 * Increases this.rateOfTime by a constant value.
+	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. Inversely, increasing doubles.
+	 */
+	public void increaseRateOfTime() {
+		if(this.rateOfTime <= 1) this.rateOfTime *= 2;
+		else this.rateOfTime += 0.25f;
+	}
+	
+	/**
+	 * Dncreases this.rateOfTime by a constant value.
+	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. Inversely, increasing doubles.
+	 */
+	public void decreaseRateOfTime() {
+		if(this.rateOfTime <= 1) this.rateOfTime /= 2;
+		else this.rateOfTime -= 0.25f;
 	}
 	
 	@Override
 	public void dispose(GLAutoDrawable drawable) {}
 	
 	/**
-	 * Initialises the display canvas
+	 * Initialises the display canvas by setting up the gl interface, library, tools, and sets the canvas to a filled colour
 	 */
 	@Override
 	public void init(GLAutoDrawable drawable) {
-		drawable.getGL().setSwapInterval(1); //updates display once every vertical refresh
-		//setup OpenGl interface (gl) and utilities library (glu)
+		//updates display once every vertical refresh
+		drawable.getGL().setSwapInterval(1); 
+	
+		//OpenGl interface (gl) and utilities library (glu)
 		gl = drawable.getGL().getGL2();
 		gl.glEnable(GL2.GL_DEPTH_TEST);
-		glu = new GLU(); //library of drawable functions
+		glu = new GLU();
 		
 		//quad is used for drawing spheres
 		quad = glu.gluNewQuadric();
@@ -95,43 +188,39 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		float red = 0.0f, green = 0.0f, blue = 0.0f, alpha = 1.0f;
 		gl.glClearColor(red, green, blue, alpha);
 
-		// Intialize all the Texture variable with their textures
-		sunTexture = loadTexture("src/Planet_Textures/sun.jpg");
+		// Load textures into each texture variable, and add to the list.
+		this.planetTextures = new ArrayList<Texture>(8);
+
+		sunTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/sun.jpg");
 		planetTextures.add(sunTexture);
-		mercuryTexture = loadTexture("src/Planet_Textures/mercury.jpg");
+		mercuryTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/mercury.jpg");
 		planetTextures.add(mercuryTexture);
-		venusTexture = loadTexture("src/Planet_Textures/venus.jpg");
+		venusTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/venus.jpg");
 		planetTextures.add(venusTexture);
-		earthTexture = loadTexture("src/Planet_Textures/earth.jpg");
+		earthTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/earth.jpg");
 		planetTextures.add(earthTexture);
-		marsTexture = loadTexture("src/Planet_Textures/mars.jpg");
+		marsTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/mars.jpg");
 		planetTextures.add(marsTexture);
-		jupiterTexture = loadTexture("src/Planet_Textures/jupiter.jpg");
+		jupiterTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/jupiter.jpg");
 		planetTextures.add(jupiterTexture);
-		saturnTexture = loadTexture("src/Planet_Textures/saturn.jpg");
+		saturnTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/saturn.jpg");
 		planetTextures.add(saturnTexture);
-		uranusTexture = loadTexture("src/Planet_Textures/uranus.jpg");
+		uranusTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/uranus.jpg");
 		planetTextures.add(uranusTexture);
-		neptuneTexture = loadTexture("src/Planet_Textures/neptune.jpg");
+		neptuneTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/neptune.jpg");
 		planetTextures.add(neptuneTexture);
-	}
-	
-	@Override
-	public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {
-		//setup the viewport
-		float VERTICAL_FOV = 60.0f;
-		float aspectRatio = (float) width/height;
-		float nearClip = .1f, farClip = 1000.0f;
-		
-		//Setup the viewport
-		gl = drawable.getGL().getGL2();
-		gl.glMatrixMode(GL2.GL_PROJECTION);
-		gl.glViewport(0, 0, width, height);
-		returnToIdentity();
-		
-		//setup the perspective projection to the viewport
-		glu.gluPerspective(VERTICAL_FOV, aspectRatio, nearClip, farClip);
-//		camera.setCamera();
+
+		// Initialize lighting properties
+		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glEnable(GL2.GL_LIGHT0);
+		float[] materialAmbient = {0.1f, 0.1f, 0.1f, 1.0f};
+		float[] materialDiffuse = {0.7f, 0.7f, 0.7f, 1.0f};
+		float[] materialSpecular = {1.0f, 1.0f, 1.0f, 1.0f};
+		float materialShininess = 100.0f;
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_AMBIENT, materialAmbient, 0);
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_DIFFUSE, materialDiffuse, 0);
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_SPECULAR, materialSpecular, 0);
+		gl.glMaterialf(GL2.GL_FRONT, GL2.GL_SHININESS, materialShininess);
 	}
 
 	private Texture loadTexture(String textureFileName) {
@@ -144,104 +233,41 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		}
 		return texture;
 	}
-	/**
-	 * Orients and draws the given planet
-	 * @param art
-	 */
-	private void drawPlanet(Planet art, Texture texture) {
-		if(art.getEnum() != null)
-			orbitPlanet(art);
-
-
-		//		rotatePlanet(art);
-		texture.bind(gl);
-		gl.glEnable(GL2.GL_TEXTURE_2D);
-		texture.enable(gl);
-
-		GLUquadric quad1 = glu.gluNewQuadric();
-		glu.gluQuadricTexture(quad1, true);
-
-		// Render the textured object
-		glu.gluSphere(quad1, art.getRadius(), 10, 10);
-
-		// Disable texture and reset state
-		texture.disable(gl);
-		gl.glDisable(GL2.GL_TEXTURE_2D);
-	}
 	
+	@Override
+	public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {		
+		//Setup the viewport
+		gl = drawable.getGL().getGL2();
+		gl.glMatrixMode(GL2.GL_PROJECTION);
+		gl.glViewport(0, 0, width, height);
+		gl.glLoadIdentity();
+		
+		//setup the projection matrix (perspective)
+		float VERTICAL_FOV = 60.0f;
+		float aspectRatio = (float) width/height;
+		float nearClip = .01f, farClip = 1000.0f;
+		glu.gluPerspective(VERTICAL_FOV, aspectRatio, nearClip, farClip);
+	}
+
 	/**
-	 * Finds the orbital angle of the planet on it's orbit and translate the planet there 
-	 * @param art
-	 * @return the actual offset of the planet
+	 * Finds the polar coordinates of the planet with the sun as the origin.
+	 * @param art The planet at it's previous position
+	 * @return the angle of the planet's orbit with respect to the sun in degrees
 	 */
-	private void orbitPlanet(Planet art) {
-		float sunRadius = 109.3f, radius = art.getRadius(), offset = art.getOffset(), orbit;
+	private float orbitPlanet(Planet art) {
+		float sunRadius = artbook.get(0).getRadius(),
+				offset = art.getOffset() + sunRadius;
 		
-		//if the planet isn't the sun, skew the offset
-		float skew = sunRadius + radius;
-		if(radius != sunRadius) offset += skew;
-		
-		//rotate the planet
-		orbit = art.orbit(frameCount) % 360;
-//		gl.glRotatef(orbit, 0.0f, 1.0f, 0.0f);
-		
-		//Translate the planet to it's orbital radius
-//		gl.glTranslatef(offset, 0.0f, 0.0f);
+		//Get the new orbital position of the planet
+		float orbit = art.orbit(timeElapsed) % 360,
+				orbitRadians = (float) Math.toRadians(orbit);
 		
 		//set the position of the planet
-		float x = (float) (offset * Math.cos(Math.toRadians(orbit)));
-		float z = (float) (offset * Math.sin(Math.toRadians(orbit)));
-		gl.glTranslatef(x, 0, z);
-		art.setX(x);
-		art.setZ(z);
-		if(art.getEnum() == PlanetEnum.EARTH) {
-//			System.out.println(art.getEnum() + " coordinates is < " + x +", 0, " + z +" >");
-//			float magnitude = (float) Math.sqrt((Math.pow(x, 2)) + (Math.pow(z, 2)));
-//			System.out.println("Magnitude of earth is " + magnitude + " units\n");
-		}
-	}
-	
-	/**
-	 * Rotates the planet on it's axis
-	 * @param art
-	 */
-	private void rotatePlanet(Planet art) {
-		float rotation = art.rotate(frameCount);
-		gl.glRotatef(rotation, 0.0f, 1.0f, 0.0f);
-	}
-	
-	/**
-	 * Sets the camera to track the given planet's angle of rotation from a given offset
-	 * @param p
-	 * @param offset
-	 */
-	public void trackPlanet(Planet p, float offset) {
-		//get planet position (also focal point), angle of rotation, and camera position
-		float focusX = p.getX(), focusZ = p.getZ();
-		float rotation = p.getRotation() % 360;
-		float camX = focusX + (float) (offset * Math.cos(Math.toRadians(rotation)));
-		float camZ = focusZ + (float) (offset * Math.sin(Math.toRadians(rotation)));
-		
-		//use this method if you're calling gluLookAt from the camera (reshape)
-//		camera.setX(camX); camera.setY(0); camera.setZ(camZ);
-//		camera.setViewX(focusX); camera.setViewY(0.0f); camera.setViewZ(focusZ);
-		
-		//use this method if you're directly setting the camera 
-		glu.gluLookAt(camX, 0.0f, camZ, focusX, 0.0f, focusZ, 0.0f, 1.0f, 0.0f);
-//		glu.gluLookAt(focusX, 0.0f, focusZ, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-		
-		System.out.println("Planet located at < " + focusX +", 0, " + focusZ +" >");
-		System.out.println("Camera focused at < " + focusX +", 0, " + focusZ +" >");
-		System.out.println("Camera at < " + camX +", 0, " + camZ +" >\n");
-	}
-	
-	/**
-	 * Sets the drawing colour to the specified planet colour
-	 * @param p
-	 */
-	public void setColor(Planet p) {
-		float red = p.getRed(), green = p.getGreen(), blue = p.getBlue();
-		gl.glColor3f(red, green, blue);
+		float planetX = (float) (offset * Math.cos(orbitRadians));
+		float planetZ = (float) (offset * Math.sin(orbitRadians));
+		art.setX(planetX);
+		art.setZ(planetZ);
+		return orbit;
 	}
 	
 	/**
@@ -252,53 +278,12 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		return director.isAnimating();
 	}
 	
-	@Override
-	public void keyPressed(KeyEvent e) {
-		int keyCode = e.getKeyCode();
-		if(keyCode == KeyEvent.VK_Q) 
-			stopAnimator();
-		else if(keyCode == KeyEvent.VK_ENTER) {
-			Planet earth = artbook.get(0);
-			
-		}
-	}
-	@Override
-	public void keyReleased(KeyEvent e) {}	
-	@Override
-	public void keyTyped(KeyEvent e) {}
-	
 	/**
 	 * Reads the artbook to be used by this implementation
 	 * @param artbook the artbook to be used
 	 */
 	public void loadArtbook(ArrayList<Planet> artbook) {
 		this.artbook = artbook;
-	}
-
-	@Override
-	public void mouseClicked(MouseEvent e) {
-		if(e.getButton() == 3) 
-			stopAnimator();
-	}
-	@Override
-	public void mouseEntered(MouseEvent e) {
-		// TODO Auto-generated method stub
-		
-	}
-	@Override
-	public void mouseExited(MouseEvent e) {
-		// TODO Auto-generated method stub
-		
-	}
-	@Override
-	public void mousePressed(MouseEvent e) {
-		// TODO Auto-generated method stub
-		
-	}
-	@Override
-	public void mouseReleased(MouseEvent e) {
-		// TODO Auto-generated method stub
-		
 	}
 	
 	/**
@@ -319,19 +304,6 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	}
 	
 	/**
-	 * Initialises the specified JOGL matrix
-	 * @param drawable The canvas
-	 * @param matrix The matrix to be initialised (GL.GL_MODELVIEW, GL.GL_PROJECTION)
-	 * @param clearString The bitstring to clear the buffers
-	 * @return the matrix for the canvas now interfaced to OpenGL
-	 */
-	private GL2 initMatrix(GLAutoDrawable drawable, int matrix, int clearString) {
-		gl = drawable.getGL().getGL2();
-		gl.glClear(clearString);
-		gl.glMatrixMode(matrix);
-		return gl;
-	}
-	/**
 	 * Creates a new GLCanvas with specified capabilities
 	 * @return A GLCanvas object with size, capabilities, and a GLEventListener
 	 */
@@ -342,17 +314,6 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 		canvas.setSize(width, height);
 		canvas.addGLEventListener(this);
 		return canvas;
-	}
-	/**
-	 * Returns the current matrix pointer to the identity (1,1,1)
-	 */
-	private void returnToIdentity() {
-		gl.glLoadIdentity();
-	}
-	
-	private void returnToOrigin() {
-		gl.glLoadIdentity();
-		gl.glTranslatef(-1.0f, -1.0f, -1.0f);
 	}
 	
 	/**
@@ -371,99 +332,292 @@ public class Jogl implements GLEventListener, MouseListener, KeyListener {
 	}
 	
 	/**
-	 * Helper class to handle camera controls
+	 * Sets the camera mode 
+	 * @param mode 0 = not moving, 1 = moving right, -1 = moving left
 	 */
-	class Camera{
-		
-		private float x, y, z;
-		private Vec3f viewVector,
-			upVector,
-			leftVector;
-		
-		public Camera(float x, float y, float z, float viewX, float viewY, float viewZ) {
-			this.x = x; this.y = y; this.z = z;
-			//find the vectors of the camera coordinate system
-			viewVector = (new Vec3f(viewX, viewY, viewZ)).normalize();
-			upVector = (new Vec3f(0.0f, 1.0f, 0.0f)).normalize();
-			leftVector = (viewVector.cross(upVector)).normalize();			
-		}
-		
-		public float getX() {
-			return x;
-		}
+	public void setCameraMode(int mode) {
+		camera.mode = mode;
+		if(mode == camera.ORBIT) this.freeOrbitDirection = camera.MOVING_NONE;
+	}
+	
+	/**
+	 * Sets the camera to <0,0,200>
+	 * looking at <0,0,0>
+	 * in the <0,0,-1> direction 
+	 */
+	public void setCameraFixed() {
+		this.camera.setFixedMode();
+	}
+	
+	/**
+	 * Moves the camera towards or away from it's focal point, moving the focal point with.
+	 * Does so by adding the unit lookAt vector * dz to the current camera position and focal point
+	 * @param dz The difference in the z position relative to the CAMERA COORDINATE SYSTEM
+	 */
+	public void moveCameraInOut(float dz) {
+		Vec3f dv = this.camera.lookAtDirection.mul(dz);
+		this.camera.position.add(dv);
+		this.camera.focalPoint.add(dv);
+	}
+	
+	/**
+	 * Rotates the camera on it's y axis
+	 * @param dt The angle of rotation
+	 */
+	public void rotateCameraLeftRight(float dt) {		
+		Vec3f v = this.camera.focalPoint;
+		this.camera.focalPoint = rotateY(dt, this.camera.position, v);
+		this.camera.lookAtDirection = new Vec3f(this.camera.focalPoint).sub(this.camera.position).normalize();
 
-		public void setX(float x) {
-			this.x = x;
-		}
-
-		public float getY() {
-			return y;
-		}
-
-		public void setY(float y) {
-			this.y = y;
-		}
-
-		public float getZ() {
-			return z;
-		}
-
-		public void setZ(float z) {
-			this.z = z;
-		}
+		//update left vector
+		this.camera.left = this.camera.lookAtDirection.cross(this.camera.up).normalize().mul(-1);
+	}
+	
+	/**
+	 * Rotates the camera on it's x axis
+	 * @param dt The angle of rotation
+	 */
+	public void rotateCameraUpDown(float dt) {
+		Vec3f v = this.camera.focalPoint;
+		this.camera.focalPoint = rotateX(dt, this.camera.position, v);
+		this.camera.lookAtDirection = new Vec3f(this.camera.focalPoint).sub(this.camera.position).normalize();
 		
-		public void setViewX(float x) {
-			this.viewVector.setX(x);
-		}
-		public void setViewY(float y) {
-			this.viewVector.setY(y);
-		}
-		public void setViewZ(float z) {
-			this.viewVector.setZ(z);
-		}
+		//update up vector
+		this.camera.up = this.camera.lookAtDirection.cross(this.camera.left).normalize();
+	}
+
+	public void setRateOfTime(float time){
+		this.rateOfTime = time;
+	}
+
+	public float getRateOfTime(){
+		return this.rateOfTime;
+	}
+	
+	/**
+	 * Rotates the vector from headpoint -> tailPoint by angleDegrees about the y axis
+	 * If headPoint is null then the tailPoint is rotating about the origin
+	 * @param angleDegrees angle of rotation 
+	 * @param headPoint The head of the vector
+	 * @param tailPoint The tail of the vector
+	 * @return the new tailPoint vector
+	 */
+	private Vec3f rotateY(float angleDegrees, Vec3f headPoint, Vec3f tailPoint) {
+		//check if we are rotating about the origin or an arbitrary headPoint
+		if(headPoint == null) headPoint = new Vec3f(0,0,0);
 		
+		Vec3f dv = new Vec3f(tailPoint).sub(headPoint);
+		float angleRadians = (float) Math.toRadians(angleDegrees);
 		
-		public float getViewX() {
-			return this.viewVector.x();
-		}
-		public float getViewY() {
-			return this.viewVector.y();
-		}
-		public float getViewZ() {
-			return this.viewVector.z();
-		}
-		public float getUpX() {
-			return this.upVector.x();
-		}
-		public float getUpY() {
-			return this.upVector.y();
-		}
-		public float getUpZ() {
-			return this.upVector.z();
-		}
-		public float getLeftX() {
-			return this.leftVector.x();
-		}
-		public float getLeftY() {
-			return this.leftVector.y();
-		}
-		public float getLeftZ() {
-			return this.leftVector.z();
-		}
+		float newX = dv.x() * (float) Math.cos(angleRadians) + dv.z() * (float) Math.sin(angleRadians),
+				newY = tailPoint.y(),
+				newZ = -(dv.x()) * (float) Math.sin(angleRadians) + dv.z() * (float) Math.cos(angleRadians);
+		return new Vec3f(newX, newY, newZ);
+	}
+	
+	/**
+	 * Rotates the vector from headpoint -> tailPoint by angleDegrees about the x axis
+	 * If headPoint is null then the tailPoint is rotating about the origin
+	 * @param angleDegrees angle of rotation 
+	 * @param headPoint The head of the vector
+	 * @param tailPoint The tail of the vector
+	 * @return the new tailPoint vector
+	 */
+	private Vec3f rotateX(float angleDegrees, Vec3f headPoint, Vec3f tailPoint) {
+		if(headPoint == null) headPoint = new Vec3f(0,0,0);
 		
-		public void setCamera() {
-			float viewX = viewVector.x(),
-					viewY = viewVector.y(),
-					viewZ = viewVector.z();
+		Vec3f dv = new Vec3f(tailPoint).sub(headPoint);
+		float angleRadians = (float) Math.toRadians(angleDegrees);
+		
+		float newX = tailPoint.x(),
+				newY = dv.y() * (float) Math.cos(angleRadians) - dv.z() * (float) Math.sin(angleRadians),
+				newZ = dv.y() * (float) Math.sin(angleRadians) + dv.z() * (float) Math.cos(angleRadians);
+		
+		return new Vec3f(newX, newY, newZ);
+	}
+	
+	/**
+	 * Get the camera mode
+	 * @return current camera mode (fixed or orbit)
+	 */
+	public int getCameraMode() {
+		return this.camera.mode;
+	}
+	
+	/**
+	 * Moves the camera left or right by adding the unit left vector multiplied by the distance to be moved
+	 * @param dt the difference in the positions
+	 */
+	public void moveCameraLeftRight(float dt) {
+		Vec3f dv = this.camera.left.mul(-dt);
+		this.camera.position.add(dv);
+		this.camera.focalPoint.add(dv);
+	}
+		
+	/**
+	 * Sets the camera to the planet to be tracked
+	 * @param pe
+	 */
+	public void setTrackedPlanet(PlanetEnum pe) {
+		this.trackedPlanet = pe;
+		this.isFreeOrbit = false;
+	}
+	
+	/**
+	 * Determines the new orbital position and rotational angle each planet makes with the sun and it's own axis, respectively
+	 */
+	public void calculatePlanetProperties() {
+		for(Planet art : artbook) {
+			//Calculate planet orbit 
+			float orbit = orbitPlanet(art);
+			float rotation = art.rotate(timeElapsed);
 			
-			float upX = upVector.x(),
-					upY = upVector.y(),
-					upZ = upVector.z();
-			
-			glu.gluLookAt(x, y, z, viewX, viewY, viewZ, upX, upY, upZ);
+			//don't update the rotation automatically if the camera is in free orbit
+			art.setOrbit(orbit);
+			if(art.getEnum() == this.trackedPlanet && this.isFreeOrbit) continue;
+			art.setRotation(rotation);
 		}
 	}
 	
+	/**
+	 * Determines the position of the camera relative to the specified planet it's orbiting
+	 */
+	private void trackPlanet() {
+		//Determine which planet is being tracked
+		Planet p = null;
+		for(Planet pl : artbook) 
+			if(pl.getEnum() == this.trackedPlanet) 
+				p = pl;
+		
+		//get tracked planet's position, rotational angle, and find the distance the camera needs to be to orbit it
+		float px = p.getX(),
+				pz = p.getZ(),
+				pr = p.getRotation(),
+				or = p.getRadius() + 0.5f;
+		if(this.isFreeOrbit) pr += this.freeOrbitDirection;
+		
+		//calculate camera position from planet position, rotation, and camera orbital radius
+		float cx = or * (float) (Math.cos(Math.toRadians(-pr))) + px;
+		float cz = or * (float) (Math.sin(Math.toRadians(-pr))) + pz;
+		
+		p.setRotation(pr);
+		
+		//Update camera left, up, lookAt vectors and camera position and focal point
+		this.camera.position.set(cx, 0, cz);
+		this.camera.focalPoint.set(px, 0, pz);
+		this.camera.up.set(0, 1, 0);
+		
+		//cp is the vector from the camera position to the planet
+		Vec3f cp = new Vec3f(px-cx, 0, pz-cz);
+		
+		this.camera.lookAtDirection.set(cp.x(), 0, cp.z()).normalize();
+		this.camera.left = this.camera.lookAtDirection.cross(this.camera.up).normalize().mul(-1);
+	}
 	
+	/**
+	 * Sets the camera using it's position, focal point, and upVector with gluLookAt
+	 */
+	public void placeCamera() {	
+		float cx = camera.position.x(),
+				cy = camera.position.y(),
+				cz = camera.position.z(),
+				
+				fx = camera.focalPoint.x(),
+				fy = camera.focalPoint.y(),
+				fz = camera.focalPoint.z(),
+				
+				ux = camera.up.x(),
+				uy = camera.up.y(),
+				uz = camera.up.z();
+		
+		glu.gluLookAt(cx, cy, cz,
+				fx, fy, fz,
+				ux, uy, uz);
+	}
+	
+	/**
+	 * Sets whether or not the camera is in free orbit around a planet
+	 * @param isFreeOrbit whether the camera is in free orbit or not
+	 * @param freeOrbitDirection the direction of orbit
+	 */
+	public void setIsFreeOrbit(boolean isFreeOrbit, int freeOrbitDirection) {
+		this.isFreeOrbit = isFreeOrbit;
+		this.freeOrbitDirection = freeOrbitDirection; 
+	}
+	
+	/**
+	 * Get the free orbit flag
+	 * @return whether the camera is in free orbit (true) or not (false)
+	 */
+	public boolean getIsFreeOrbit() {
+		return this.isFreeOrbit;
+	}
+	
+	/**
+	 * Used to help manage the camera
+	 */
+	class Camera {
+		public final int FREE = 0, //viewing from a static or dynamic position
+						 ORBIT = 1; //camera is orbiting a planet
+		
+		//For rotation direction
+		public final int MOVING_LEFT = -1,
+				 		 MOVING_NONE = 0,
+						 MOVING_RIGHT = 1;
+		
+		private int mode;
+		
+		private Vec3f position, lookAtDirection, left, up; 
+		private Vec3f focalPoint;
+		
+		public Camera() {
+			setFixedMode();
+		}
+		
+		public void setFixedMode() {
+			this.position = new Vec3f(0,0,200);
+			this.focalPoint = new Vec3f(0,0,0);
+			
+			this.lookAtDirection = new Vec3f(new Vec3f(this.focalPoint).sub(this.position)).normalize();
+			
+			this.up = new Vec3f(0,1,0);
+			this.left = this.lookAtDirection.cross(this.up).normalize().mul(-1);
+			this.mode = FREE;
+		}
+		
+		public int getMode() {
+			return this.mode;
+		}
+		
+		public void setPositionVector(float[] xyz) {
+			this.position.set(xyz);
+		}
+		
+		public void setLookAtVector(float[] xyz) {
+			this.lookAtDirection.set(xyz);
+		}
+		
+		public void setUpVector(float[] xyz) {
+			this.up.set(xyz);
+			this.up.normalize();
+		}
+		
+		public void setLeftVector(float[] xyz) {
+			this.left.set(xyz);
+			this.left.normalize();
+		}
+		
+		@Override
+		public String toString() {
+			String str = "";
+			str += "Position = " + position.toString() + "\n"
+					+ "Focal Point = " + focalPoint.toString() + "\n"
+					+ "lookAt Vector = " + lookAtDirection.toString() + "\n"
+					+ "left Vector = " + left.toString() + "\n"
+					+ "up Vector = " + up.toString();
+			return str;
+			
+		}
+	}
 }
 
