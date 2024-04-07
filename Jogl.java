@@ -215,8 +215,8 @@ public class Jogl implements GLEventListener {
 		gl.glEnable(GL2.GL_LIGHT0);
 		float[] materialAmbient = {0.1f, 0.1f, 0.1f, 1.0f};
 		float[] materialDiffuse = {0.7f, 0.7f, 0.7f, 1.0f};
-		float[] materialSpecular = {1.0f, 1.0f, 1.0f, 1.0f};
-		float materialShininess = 100.0f;
+		float[] materialSpecular = {0.2f, 0.2f, 0.2f, 1.0f};
+		float materialShininess = 5.0f;
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_AMBIENT, materialAmbient, 0);
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_DIFFUSE, materialDiffuse, 0);
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_SPECULAR, materialSpecular, 0);
