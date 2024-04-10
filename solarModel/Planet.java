@@ -5,7 +5,7 @@ import com.jogamp.opengl.math.Vec3f;
 /**
  *  * A Planet is a 3d graphical element to be displayed on jogl.java
  * Planets have rotation, orbit, offset, and a radius
- * Planets may also have moons
+ * Planets may also have moons (not implemented)
  * Planets have rgb intensity values in the range of [0.0f,1.0f]
  */
 public class Planet {
@@ -14,9 +14,10 @@ public class Planet {
 	protected float radius; //relative to earth
 	protected float offset; //relative to earth's offset from the sun (1AU)
 	private float rotateRate, orbitRate; //relative velocities to earth
-	protected Vec3f color, position;
-	protected Moon moon;
-	protected PlanetEnum planetEnum;
+	protected Vec3f color; // The color for each planet using RGB model
+	protected Vec3f position; // Position of each planet using (x,y,z) model (Planets are drawn on the XZ plane
+	protected Moon moon;	// The planets moon. (not implemented)
+	protected PlanetEnum planetEnum; // The enum holding all the planets
 	
 	//all ratios are of earth's respective properties
 	private static float[] radiusRatios = {0.382f, 0.949f, 1.000f, 0.532f, 11.209f, 9.449f, 4.007f, 3.883f};
@@ -35,28 +36,37 @@ public class Planet {
 		//init rotation and orbit
 		this.rotation = 0; this.orbit = 0;
 		PlanetEnum[] planets = PlanetEnum.values();
+		// intialize Earth values first because all other planets property
+		// values are calculated as a ratio from Earth's property values
 		float earthRadius = radiusRatios[EARTHINDEX],
 				earthOffset = offsetRatios[EARTHINDEX],
 				earthRotateRate = rotateRatios[EARTHINDEX],
 				earthOrbitRate = orbitRatios[EARTHINDEX];
 		
 		for(int planetIndex = 0; planetIndex < planets.length; planetIndex++) {
-			if(planets[planetIndex] == p) {
+			if(planets[planetIndex] == p) { // Find the appropriate planet set values for
+				//Set all the planet properties
 				this.radius = earthRadius * radiusRatios[planetIndex];
 				this.offset = earthOffset * offsetRatios[planetIndex];
 				this.rotateRate = earthRotateRate * rotateRatios[planetIndex];
 				this.orbitRate = earthOrbitRate * orbitRatios[planetIndex];
 				this.color = new Vec3f(planetColors[planetIndex]);
 				this.planetEnum = p;
-				this.position = new Vec3f(0.0f,0.0f,0.0f);
+				this.position = new Vec3f(0.0f,0.0f,0.0f); // All planets will have a postion at (0,0,0) Will be changed by the offset.
 			}
 		}
 	}
-	
+
+	/**
+	 * @return The planeEnum
+	 */
 	public PlanetEnum getEnum() {
 		return planetEnum;
 	}
 
+	/**
+	 * @param planetEnum Sets the planetEnum
+	 */
 	public void setPlanetEnum(PlanetEnum planetEnum) {
 		this.planetEnum = planetEnum;
 	}
@@ -86,7 +96,15 @@ public class Planet {
 			}
 		}
 	}
-	
+
+	/**
+	 * Create a planet with explicit values passed as arguments
+	 * @param radius Radius of the planet (will determin planets size)
+	 * @param offset Distance from the center of scene (center is at (0,0,0)
+	 * @param orbitRate How fast the planet will rotate around the sun
+	 * @param rotateRate How fast the planet wil rotate around its axis
+	 * @param color The color of the planet
+	 */
 	public Planet(float radius, float offset, float orbitRate, float rotateRate, float[] color) {
 		this.radius = radius;
 		this.offset = offset;
@@ -96,7 +114,16 @@ public class Planet {
 		this.color = new Vec3f(color);
 		this.position = new Vec3f(0.0f,0.0f,0.0f);
 	}
-	
+
+	/**
+	 * Create a planet with explicit values passed as arguments
+	 * @param position Set the position where the planet will be located at
+	 * @param radius Radius of the planet (will determin planets size)
+	 * @param offset Distance from the center of scene (center is at (0,0,0)
+	 * @param orbitRate How fast the planet will rotate around the sun
+	 * @param rotateRate How fast the planet wil rotate around its axis
+	 * @param color The color of the planet
+	 */
 	public Planet(float[] position, float radius, float offset, float orbitRate, float rotateRate, float[] color) {
 		this.radius = radius;
 		this.offset = offset;
@@ -114,9 +141,7 @@ public class Planet {
 	 */
 	public float orbit(float frameCount) {
 		if(this.planetEnum == null) return 0;
-		//find the new orbit angle theta and the delta between the current and new orbit
 		float theta = frameCount * (this.orbitRate);
-//		this.orbit = theta;
 		return theta;
 	}
 	
@@ -126,12 +151,15 @@ public class Planet {
 	 * @return The angle the planet makes with it's axis of rotation
 	 */
 	public float rotate(float frameCount) {
-		//find the new rotation angle theta 
 		float theta = frameCount * this.rotateRate;
-//		this.rotation = theta;
 		return theta;
 	}
-	
+
+	/*
+	Series of setters and getters to provide encapsulation
+	These methods will modify or return certain planet properties
+	 */
+
 	public void setX(float value) {
 		this.position.setX(value);
 	}
@@ -167,7 +195,6 @@ public class Planet {
 	public boolean hasMoon() {
 		return moon != null;
 	}
-	
 	public float getRotation() {
 		return rotation;
 	}

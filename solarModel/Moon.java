@@ -1,6 +1,9 @@
 package solarModel;
 
-
+/**
+ * NOT IMPLEMENTED
+ * Idea is for the moon rotating its planet to behave the same as planets rotating the sun.
+ */
 public class Moon extends Planet {
 
 	public Moon(PlanetEnum p) {
