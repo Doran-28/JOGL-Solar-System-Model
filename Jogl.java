@@ -18,17 +18,17 @@ public class Jogl implements GLEventListener {
 	private GL2 gl; //interface to OpenGL (C) functions
 	private GLU glu; //graphics library utilities
 	private GLUquadric quad; //used for drawing spheres
-	private ArrayList<Planet> artbook;
-	private GLCanvas canvas;
+	private ArrayList<Planet> artbook;	// List of planets to be drawn
+	private GLCanvas canvas;			// The canvas to be drawn on
 	private Animator director;
-	private float timeElapsed, rateOfTime; //time since sim began and it's rate
+	private float timeElapsed, rateOfTime; //time since simulation began and it's rate.
 	private PlanetEnum trackedPlanet; //the planet currently being tracked
-	private Camera camera; 
+	private Camera camera; 		// The camera which views the scene
 	private boolean isFreeOrbit; //Flag for if the user is controlling the camera in-orbit
 	private int freeOrbitDirection; //0 (no orbit), 1 (right orbit), or -1 (left orbit)
 
-	private ArrayList<Texture> planetTextures;
-
+	private ArrayList<Texture> planetTextures; // List of all planet textures
+	// Textures for every planet and the sun
 	private Texture sunTexture;
 	private Texture mercuryTexture;
 	private Texture venusTexture;
@@ -44,14 +44,14 @@ public class Jogl implements GLEventListener {
 	 */
 	public Jogl () {
 		canvas = makeCanvas(500,500);
-		director = new Animator(canvas);
-		this.artbook = new ArrayList<Planet>();
-		this.trackedPlanet = null;
-		this.timeElapsed = 0;
-		this.rateOfTime = 1;
+		director = new Animator(canvas);		// Sets up the animation
+		this.artbook = new ArrayList<Planet>();	// Initialize the ArrayList of planets
+		this.trackedPlanet = null;				// There is no set planet being tracked right away
+		this.timeElapsed = 0;					// Total time elapsed equal 0 when created
+		this.rateOfTime = 1;					// timeElapsed goes up by 1 every time interval
 		this.isFreeOrbit = false;
 		this.freeOrbitDirection = 0;
-		this.camera = new Camera();
+		this.camera = new Camera();				// Initialize the camera
 	}
 	
 	/**
@@ -69,7 +69,7 @@ public class Jogl implements GLEventListener {
 		if(this.camera.mode == this.camera.ORBIT) trackPlanet();
 		placeCamera();
 
-		GLUquadric quad1 = glu.gluNewQuadric();
+		GLUquadric quad1 = glu.gluNewQuadric(); // Quadric will be used to draw spheres with textures
 		//Draw sun with texuture and lighting
 		drawSun(quad1);
 		
@@ -78,11 +78,11 @@ public class Jogl implements GLEventListener {
 		 * and the viewport is filled with the camera.
 		 * now we begin drawing planets
 		 */
-		int index = 0;
+		int index = 0; // index is used to track what planet is being drawn. Used to know what texure to be used
 		Texture planetTexture;
 		for(Planet p : this.artbook) {
 
-			// Skip the sun
+			// Skip the sun, because we already drew it above using drawSun()
 			if (index == 0) {
 				index++;
 				continue;
@@ -92,48 +92,48 @@ public class Jogl implements GLEventListener {
 			gl.glPushMatrix();
 				//go to this planet's orbital position and rotate it
 				float rotationRadians = (float) Math.toRadians((p.getRotation()));
-				if(p.getEnum() != null) gl.glTranslatef(p.getX(), 0.0f, p.getZ());
-				gl.glRotatef(rotationRadians, 0.0f, 1.0f, 0.0f);
+				if(p.getEnum() != null) // If not the sun
+					gl.glTranslatef(p.getX(), 0.0f, p.getZ());  // translate planet to appropiate coordinates
+				gl.glRotatef(rotationRadians, 0.0f, 1.0f, 0.0f);	// rotate the planet
 
 				// Draw planet with texture
 				planetTexture = planetTextures.get(index);
-				planetTexture.bind(gl);
-				gl.glEnable(GL2.GL_TEXTURE_2D);
-				planetTexture.enable(gl);
-				glu.gluQuadricTexture(quad1, true);
-				glu.gluSphere(quad1,  0.5 * (p.getRadius()), 30, 30);
+				planetTexture.bind(gl);					// Bind texture with drawing tool
+				gl.glEnable(GL2.GL_TEXTURE_2D);			// Enable textures
+				planetTexture.enable(gl);				// Enable the texture to be drawn
+				glu.gluQuadricTexture(quad1, true);	// Allow quadric to be drawn with texture
+				glu.gluSphere(quad1,  0.5 * (p.getRadius()), 30, 30); 	// Draw sphere with quadric that has textures on it
+				// Disable textures
 				planetTexture.disable(gl);
 				gl.glDisable(GL2.GL_TEXTURE_2D);
 
 			gl.glPopMatrix();
-			index++;
+			index++; // index is incremeted
 		}
 		
 		timeElapsed+= rateOfTime;
 	}
 	// Draws the Sun with texture, and making it the main light source
 	private void drawSun(GLUquadric quad){
-		float[] lightPosition = {0.0f, 0.0f, 0.0f, 1.0f}; // Example position (center of the scene)
-		gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
-		gl.glDisable(GL2.GL_LIGHTING);
-		gl.glPushMatrix();
-		gl.glTranslatef(lightPosition[0], lightPosition[1], lightPosition[2]); // Set the position of the light source
-		gl.glEnable(GL2.GL_TEXTURE_2D);
-		sunTexture.enable(gl);
+		float[] lightPosition = {0.0f, 0.0f, 0.0f, 1.0f}; // position of the light source (center of the scene)
+		gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0); // Set the properties
+		gl.glDisable(GL2.GL_LIGHTING);	// Disable lighting before pushing the matrix
+		gl.glPushMatrix();				// push matrix before drawing the sun
+		gl.glEnable(GL2.GL_TEXTURE_2D);	// enable the lighting again
+		sunTexture.enable(gl);			// bind texture with drawing tool
 		sunTexture.bind(gl);
-		glu.gluQuadricTexture(quad, true);
-		glu.gluSphere(quad, 0.5f * 109.3f, 30, 30);
-		sunTexture.disable(gl);
+		glu.gluQuadricTexture(quad, true);	// allow textures to be drawn on quadric
+		glu.gluSphere(quad, 0.5f * 109.3f, 30, 30);	// draw the sphere using quadric
+		sunTexture.disable(gl);			// disable texture
 		gl.glDisable(GL2.GL_TEXTURE_2D);
-		gl.glPopMatrix();
-		gl.glEnable(GL2.GL_LIGHTING);
+		gl.glPopMatrix(); 				// Pop matrix after done drawingin
+		gl.glEnable(GL2.GL_LIGHTING);   // enable lighting after popping the matrix
 	}
 	
 	/**
 	 * Initialises the specified JOGL matrix
 	 * @param drawable The canvas
 	 * @param matrix The matrix to be initialised (GL.GL_MODELVIEW, GL.GL_PROJECTION)
-	 * @param clearString The bitstring to clear the buffers
 	 * @return the matrix for the canvas now interfaced to OpenGL
 	 */
 	private GL2 initMatrix(GLAutoDrawable drawable, int matrix) {
@@ -150,8 +150,10 @@ public class Jogl implements GLEventListener {
 	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. Inversely, increasing doubles.
 	 */
 	public void increaseRateOfTime() {
-		if(this.rateOfTime <= 1) this.rateOfTime *= 2;
-		else this.rateOfTime += 0.25f;
+		if(this.rateOfTime <= 1)
+			this.rateOfTime *= 2;
+		else
+			this.rateOfTime += 0.25f;
 	}
 	
 	/**
@@ -159,10 +161,16 @@ public class Jogl implements GLEventListener {
 	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. Inversely, increasing doubles.
 	 */
 	public void decreaseRateOfTime() {
-		if(this.rateOfTime <= 1) this.rateOfTime /= 2;
-		else this.rateOfTime -= 0.25f;
+		if(this.rateOfTime <= 1)
+			this.rateOfTime /= 2;
+		else
+			this.rateOfTime -= 0.25f;
 	}
-	
+
+	/*
+	Method exists because it must be implemented from the GLEventListener interface
+	Method is not utilized in program
+	 */
 	@Override
 	public void dispose(GLAutoDrawable drawable) {}
 	
@@ -181,8 +189,7 @@ public class Jogl implements GLEventListener {
 		
 		//quad is used for drawing spheres
 		quad = glu.gluNewQuadric();
-		final int DRAWSTYLES[] = {GLU.GLU_FILL, GLU.GLU_LINE, GLU.GLU_SILHOUETTE, GLU.GLU_POINT};
-		glu.gluQuadricDrawStyle(quad, DRAWSTYLES[1]);
+		glu.gluQuadricDrawStyle(quad, GLU.GLU_LINE);
 				
 		//clear the canvas to a solid colour
 		float red = 0.0f, green = 0.0f, blue = 0.0f, alpha = 1.0f;
@@ -191,40 +198,48 @@ public class Jogl implements GLEventListener {
 		// Load textures into each texture variable, and add to the list.
 		this.planetTextures = new ArrayList<Texture>(8);
 
-		sunTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/sun.jpg");
+		sunTexture = loadTexture("src/Planet_Textures/sun.jpg");
 		planetTextures.add(sunTexture);
-		mercuryTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/mercury.jpg");
+		mercuryTexture = loadTexture("src/Planet_Textures/mercury.jpg");
 		planetTextures.add(mercuryTexture);
-		venusTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/venus.jpg");
+		venusTexture = loadTexture("src/Planet_Textures/venus.jpg");
 		planetTextures.add(venusTexture);
-		earthTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/earth.jpg");
+		earthTexture = loadTexture("src/Planet_Textures/earth.jpg");
 		planetTextures.add(earthTexture);
-		marsTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/mars.jpg");
+		marsTexture = loadTexture("src/Planet_Textures/mars.jpg");
 		planetTextures.add(marsTexture);
-		jupiterTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/jupiter.jpg");
+		jupiterTexture = loadTexture("src/Planet_Textures/jupiter.jpg");
 		planetTextures.add(jupiterTexture);
-		saturnTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/saturn.jpg");
+		saturnTexture = loadTexture("src/Planet_Textures/saturn.jpg");
 		planetTextures.add(saturnTexture);
-		uranusTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/uranus.jpg");
+		uranusTexture = loadTexture("src/Planet_Textures/uranus.jpg");
 		planetTextures.add(uranusTexture);
-		neptuneTexture = loadTexture("/Users/doran/IdeaProjects/SolarSystem/src/Planet_Textures/neptune.jpg");
+		neptuneTexture = loadTexture("src/Planet_Textures/neptune.jpg");
 		planetTextures.add(neptuneTexture);
 
 		// Initialize lighting properties
 		gl.glEnable(GL2.GL_LIGHTING);
 		gl.glEnable(GL2.GL_LIGHT0);
-		float[] materialAmbient = {0.1f, 0.1f, 0.1f, 1.0f};
-		float[] materialDiffuse = {0.7f, 0.7f, 0.7f, 1.0f};
-		float[] materialSpecular = {0.2f, 0.2f, 0.2f, 1.0f};
-		float materialShininess = 5.0f;
+		float[] materialAmbient = {0.1f, 0.1f, 0.1f, 1.0f}; // Very low ambient light so darkside of planets cannot be seen
+		float[] materialDiffuse = {0.7f, 0.7f, 0.7f, 1.0f}; // Diffuse reflection allows for un-uniform light distribution
+		float[] materialSpecular = {0.4f, 0.4f, 0.4f, 1.0f}; // Low Specular reflection so the highlights aren't too bright
+		float materialShininess = 5.0f;						// Low shininess to avoid fake plastic look
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_AMBIENT, materialAmbient, 0);
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_DIFFUSE, materialDiffuse, 0);
 		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_SPECULAR, materialSpecular, 0);
 		gl.glMaterialf(GL2.GL_FRONT, GL2.GL_SHININESS, materialShininess);
 	}
 
+	/**
+	 * Method used to initialize Texture types
+	 * Reads local file path to store .jpg file in the variable
+	 * @param textureFileName local path (Plane_Textures) to specific texture.
+	 *                        Path can start from src/......
+	 * @return Texture type that holds path to .jpg file
+	 */
 	private Texture loadTexture(String textureFileName) {
 		Texture texture = null;
+		// Try catch block incase the texture path is not valid
 		try {
 			File textureFile = new File(textureFileName); // Load your JPG image
 			texture = TextureIO.newTexture(textureFile, true);
@@ -238,15 +253,15 @@ public class Jogl implements GLEventListener {
 	public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {		
 		//Setup the viewport
 		gl = drawable.getGL().getGL2();
-		gl.glMatrixMode(GL2.GL_PROJECTION);
-		gl.glViewport(0, 0, width, height);
-		gl.glLoadIdentity();
+		gl.glMatrixMode(GL2.GL_PROJECTION); // Sets matrix mode
+		gl.glViewport(0, 0, width, height); // Sets viewport to new reshaped size
+		gl.glLoadIdentity(); // Load indentity matrix
 		
 		//setup the projection matrix (perspective)
 		float VERTICAL_FOV = 60.0f;
-		float aspectRatio = (float) width/height;
-		float nearClip = .01f, farClip = 1000.0f;
-		glu.gluPerspective(VERTICAL_FOV, aspectRatio, nearClip, farClip);
+		float aspectRatio = (float) width/height;   // Uses width and height of frame to calculate aspect ratio
+		float nearClip = .01f, farClip = 1000.0f;   // near and far values for perspective projection
+		glu.gluPerspective(VERTICAL_FOV, aspectRatio, nearClip, farClip); // Sets up perspective projection
 	}
 
 	/**
@@ -256,15 +271,16 @@ public class Jogl implements GLEventListener {
 	 */
 	private float orbitPlanet(Planet art) {
 		float sunRadius = artbook.get(0).getRadius(),
-				offset = art.getOffset() + sunRadius;
+				offset = art.getOffset() + sunRadius; // Ensure we obtain the proper offset of the planet
 		
 		//Get the new orbital position of the planet
-		float orbit = art.orbit(timeElapsed) % 360,
+		float orbit = art.orbit(timeElapsed) % 360,   // orbit represents the angle (in degrees) from the orginal planet position
 				orbitRadians = (float) Math.toRadians(orbit);
 		
-		//set the position of the planet
+		//Calculate the position of the planet
 		float planetX = (float) (offset * Math.cos(orbitRadians));
 		float planetZ = (float) (offset * Math.sin(orbitRadians));
+		//Set the position of the planet
 		art.setX(planetX);
 		art.setZ(planetZ);
 		return orbit;
@@ -311,8 +327,8 @@ public class Jogl implements GLEventListener {
 		GLProfile glp = GLProfile.get("GL2"); //Gets the interface
 		GLCapabilities caps = new GLCapabilities(glp); //Analog to OpenGL context
 		GLCanvas canvas = new GLCanvas(caps);
-		canvas.setSize(width, height);
-		canvas.addGLEventListener(this);
+		canvas.setSize(width, height);	// sets size of the canvas
+		canvas.addGLEventListener(this); // Add the GLEvenetListener to the canvas
 		return canvas;
 	}
 	
@@ -368,7 +384,6 @@ public class Jogl implements GLEventListener {
 		Vec3f v = this.camera.focalPoint;
 		this.camera.focalPoint = rotateY(dt, this.camera.position, v);
 		this.camera.lookAtDirection = new Vec3f(this.camera.focalPoint).sub(this.camera.position).normalize();
-
 		//update left vector
 		this.camera.left = this.camera.lookAtDirection.cross(this.camera.up).normalize().mul(-1);
 	}
@@ -381,7 +396,6 @@ public class Jogl implements GLEventListener {
 		Vec3f v = this.camera.focalPoint;
 		this.camera.focalPoint = rotateX(dt, this.camera.position, v);
 		this.camera.lookAtDirection = new Vec3f(this.camera.focalPoint).sub(this.camera.position).normalize();
-		
 		//update up vector
 		this.camera.up = this.camera.lookAtDirection.cross(this.camera.left).normalize();
 	}
@@ -494,7 +508,8 @@ public class Jogl implements GLEventListener {
 				pz = p.getZ(),
 				pr = p.getRotation(),
 				or = p.getRadius() + 0.5f;
-		if(this.isFreeOrbit) pr += this.freeOrbitDirection;
+		if(this.isFreeOrbit)
+			pr += this.freeOrbitDirection;
 		
 		//calculate camera position from planet position, rotation, and camera orbital radius
 		float cx = or * (float) (Math.cos(Math.toRadians(-pr))) + px;
@@ -565,7 +580,7 @@ public class Jogl implements GLEventListener {
 				 		 MOVING_NONE = 0,
 						 MOVING_RIGHT = 1;
 		
-		private int mode;
+		private int mode;	// Determines if camera is orbiting a planet, or is in free camera mode
 		
 		private Vec3f position, lookAtDirection, left, up; 
 		private Vec3f focalPoint;
@@ -575,16 +590,19 @@ public class Jogl implements GLEventListener {
 		}
 		
 		public void setFixedMode() {
-			this.position = new Vec3f(0,0,200);
-			this.focalPoint = new Vec3f(0,0,0);
+			this.position = new Vec3f(0,0,200);	// When user hits 0 on keyboard, camera is in there coordinates
+			this.focalPoint = new Vec3f(0,0,0);	// camera looks at the center of the scene (the sun)
 			
 			this.lookAtDirection = new Vec3f(new Vec3f(this.focalPoint).sub(this.position)).normalize();
 			
 			this.up = new Vec3f(0,1,0);
 			this.left = this.lookAtDirection.cross(this.up).normalize().mul(-1);
-			this.mode = FREE;
+			this.mode = FREE;	// Free camera mode. mode = 1
 		}
-		
+
+		/*
+		Series of setters and getters to provide encapsulation for camera properties
+		 */
 		public int getMode() {
 			return this.mode;
 		}
@@ -606,7 +624,11 @@ public class Jogl implements GLEventListener {
 			this.left.set(xyz);
 			this.left.normalize();
 		}
-		
+
+		/**
+		 * toString method that displays camera properties
+		 * @return String of camera properties
+		 */
 		@Override
 		public String toString() {
 			String str = "";
