@@ -30,6 +30,10 @@ S: 	Rotates the camera to look upwards
 A:	Rotates the camera to the left
 D:	Rotates the camera to the right
 
+(For orbital camera mode)
+Left arrow:     Rotates camera round the orbit of the planet leftwards
+Right arrow:    Rotates camera round the orbit of the planet rightwards
+
 Space bar:	Pauses animation (Press again to resume animation)
 
 Shift:		Increases the animation speed
