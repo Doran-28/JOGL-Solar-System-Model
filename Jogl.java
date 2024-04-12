@@ -55,8 +55,13 @@ public class Jogl implements GLEventListener {
 	}
 	
 	/**
-	 * Driven by the Animator director and draws everything in the artbook
-	 */
+	 * The executive function of the simulation. This display does the following operations:
+	 * 1. Determine planet coordinates and setup the modelview matrix
+	 * 2. Place the camera based on whether it is in free motion or in (fixed) orbit around a planet
+	 * 3. The sun will be initially drawn
+	 * 4. Each planet will be drawn and textured to it's orbital position and rotational angle (with respect to it's principle x axis)
+	 * 5. Increase the timeElapsed by rateOfTime
+ 	 */
 	@Override
 	public void display(GLAutoDrawable drawable) {		
 //		Calculates the orbital and rotational angles of each planet
@@ -113,7 +118,12 @@ public class Jogl implements GLEventListener {
 		
 		timeElapsed+= rateOfTime;
 	}
-	// Draws the Sun with texture, and making it the main light source
+	
+	/**
+	 * Draws the sun as the light source for the system.
+	 * First the light source is set at the modelview origin, then the textured sun is drawn
+	 * NOTE: drawSun assumes that the modelview coordinate is at the origin <0,0,0,1> 
+	 */
 	private void drawSun(GLUquadric quad){
 		float[] lightPosition = {0.0f, 0.0f, 0.0f, 1.0f}; // position of the light source (center of the scene)
 		gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0); // Set the properties
@@ -134,7 +144,7 @@ public class Jogl implements GLEventListener {
 	 * Initialises the specified JOGL matrix
 	 * @param drawable The canvas
 	 * @param matrix The matrix to be initialised (GL.GL_MODELVIEW, GL.GL_PROJECTION)
-	 * @return the matrix for the canvas now interfaced to OpenGL
+	 * @return the openGL interface
 	 */
 	private GL2 initMatrix(GLAutoDrawable drawable, int matrix) {
 		int clearString = (GL.GL_COLOR_BUFFER_BIT  | GL.GL_DEPTH_BUFFER_BIT);
@@ -158,7 +168,7 @@ public class Jogl implements GLEventListener {
 	
 	/**
 	 * Dncreases this.rateOfTime by a constant value.
-	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. Inversely, increasing doubles.
+	 * To prevent -ve values, decreasing when the rate = 1 halves the rate. When rate < 1, increasing doubles.
 	 */
 	public void decreaseRateOfTime() {
 		if(this.rateOfTime <= 1)
@@ -168,8 +178,8 @@ public class Jogl implements GLEventListener {
 	}
 
 	/*
-	Method exists because it must be implemented from the GLEventListener interface
-	Method is not utilized in program
+	 * Method exists because it must be implemented from the GLEventListener interface
+	 * Method is not utilized in program
 	 */
 	@Override
 	public void dispose(GLAutoDrawable drawable) {}
@@ -399,7 +409,10 @@ public class Jogl implements GLEventListener {
 		//update up vector
 		this.camera.up = this.camera.lookAtDirection.cross(this.camera.left).normalize();
 	}
-
+	
+	/**
+	 * Used for pausing and playing. Limited to 0 (no change in time) or 1 
+	 */
 	public void setRateOfTime(float time){
 		this.rateOfTime = time;
 	}
@@ -459,7 +472,7 @@ public class Jogl implements GLEventListener {
 	}
 	
 	/**
-	 * Moves the camera left or right by adding the unit left vector multiplied by the distance to be moved
+	 * Moves the camera left or right on it's principle x axis by adding the unit left vector multiplied by the distance to be moved
 	 * @param dt the difference in the positions
 	 */
 	public void moveCameraLeftRight(float dt) {
@@ -478,23 +491,26 @@ public class Jogl implements GLEventListener {
 	}
 	
 	/**
-	 * Determines the new orbital position and rotational angle each planet makes with the sun and it's own axis, respectively
+	 * Determines orbital position and rotational angle as functions of timeElapsed (orbitPlanet and art.rotate)
 	 */
 	public void calculatePlanetProperties() {
 		for(Planet art : artbook) {
 			//Calculate planet orbit 
 			float orbit = orbitPlanet(art);
 			float rotation = art.rotate(timeElapsed);
-			
-			//don't update the rotation automatically if the camera is in free orbit
+
+			//set the new planet orbit and rotation
+			//don't update the tracked planet's rotation if we're in FREE orbit around it
 			art.setOrbit(orbit);
-			if(art.getEnum() == this.trackedPlanet && this.isFreeOrbit) continue;
+			if(this.isFreeOrbit && art.getEnum() == this.trackedPlanet) continue;
 			art.setRotation(rotation);
 		}
 	}
 	
 	/**
-	 * Determines the position of the camera relative to the specified planet it's orbiting
+	 * Updates the camera parameters to orbit the tracked planet if camera is in orbit mode
+	 * If the camera is in free orbit, the planet's rotational angle is modified ONLY on user input
+	 * Camera orientation is determined by the vector cp = <planet.position - camera.position> 
 	 */
 	private void trackPlanet() {
 		//Determine which planet is being tracked
@@ -553,7 +569,7 @@ public class Jogl implements GLEventListener {
 	/**
 	 * Sets whether or not the camera is in free orbit around a planet
 	 * @param isFreeOrbit whether the camera is in free orbit or not
-	 * @param freeOrbitDirection the direction of orbit
+	 * @param freeOrbitDirection the direction of orbit (accepted values are -1, 0, 1)
 	 */
 	public void setIsFreeOrbit(boolean isFreeOrbit, int freeOrbitDirection) {
 		this.isFreeOrbit = isFreeOrbit;
@@ -570,6 +586,9 @@ public class Jogl implements GLEventListener {
 	
 	/**
 	 * Used to help manage the camera
+  	 * Based on an up, lookAt, and left vector
+         * Keeps track of it's position and focal point
+         * Is either in FREE mode (0) or ORBIT mode (1) around a planet
 	 */
 	class Camera {
 		public final int FREE = 0, //viewing from a static or dynamic position
@@ -588,7 +607,15 @@ public class Jogl implements GLEventListener {
 		public Camera() {
 			setFixedMode();
 		}
-		
+
+		/**
+		 * Sets default camera values:
+		 * position = <0,0,200>
+		 * focalPoint = <0,0,0>
+		 * lookAtDirection = <focalPoint - position>/N = <0,0,-1>
+		 * left = (<lookAtDirection> X <up>)/-N = <0,0,-1>
+		 * up = <0,1,0>
+		 */
 		public void setFixedMode() {
 			this.position = new Vec3f(0,0,200);	// When user hits 0 on keyboard, camera is in there coordinates
 			this.focalPoint = new Vec3f(0,0,0);	// camera looks at the center of the scene (the sun)
